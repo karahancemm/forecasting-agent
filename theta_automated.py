@@ -29,7 +29,14 @@ def search_theta(unique_id, train, test, season_length, decomposition_type):
             'forecast': forecast})
     return None, results
 
-
+def fit_theta(unique_id, train, test, season_length, decomposition_type):
+    train_df = pd.DataFrame({'unique_id': unique_id, 'ds': train.index, 'y': train.values})
+    model = StatsForecast(models = [Theta(season_length = season_length, decomposition_type = decomposition_type)], freq = 'D', n_jobs = 1)
+    model.fit(train_df)
+    forecast = model.predict(h = len(test))
+    forecast = forecast['Theta'].values
+    metrics = eval_metrics(test, forecast, train)
+    return {'MAE': metrics['MAE'], 'RMSE': metrics['RMSE'], 'MAPE%': metrics['MAPE%'], 'MASE': metrics['MASE'], 'forecast': forecast}
 
 
 
