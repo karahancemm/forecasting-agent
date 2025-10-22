@@ -4,10 +4,8 @@ from train_test import train_test_split
 
 def adaptive_response_rate_ses(train, h = 1, alpha_min = 0.2, alpha_max = 0.6, beta = 0.2, gamma = 0.2, init_level = None, eps = 1e-8):
                                      # forecast horizon      beta =smoothing for mean error E_t   gamma = smoothing for MAD_t
-    
     train = pd.Series(train)
     n = len(train)
-    
     def _alpha(E, MAD):
         ratio = abs(E) / (MAD + eps)
         raw = alpha_min + (alpha_max - alpha_min) * min(1.0, ratio)
@@ -32,19 +30,10 @@ def adaptive_response_rate_ses(train, h = 1, alpha_min = 0.2, alpha_max = 0.6, b
         alpha_t[t] = _alpha(E, MAD)
         level[t] = yhat + alpha_t[t] * err[t]
 
-    fitted = pd.Series(level, index = train.index)
-    forecast_index = pd.RangeIndex(0, h)
-    forecast = pd.Series(np.repeat(level[-1], h), index = forecast_index)
+    fitted = pd.Series(np.r_[fitted_prev, level[:-1]], index = train.index)
+    #fitted = pd.Series(level, index = train.index)
+    forecast = pd.Series(np.repeat(level[-1], h), index = test.index)
 
     return {'level': pd.Series(level, index = train.index), 'fitted': fitted, 'errors': pd.Series(err, index = train.index), 
             'alpha_t': pd.Series(alpha_t, index = train.index), 'forecast': forecast, 'last_level': level[-1]}
-
-
-# --- Folder --- #
-folder = 'C:/Users/ckarahan/Desktop/Python Projects/Forecast-Agent/data/raw/'
-
-# --- Read File --- #
-df = pd.read_csv(folder + 'supply_chain_dataset1.csv')
-
-train, test, train_exog, test_exog = train_test_split(df, df['SKU_ID'].iloc[0])
 

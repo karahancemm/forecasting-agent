@@ -55,51 +55,66 @@ def eval_metrics(y_true, y_pred, insample):
     mase = (np.abs(y_true - y_pred).mean()) / naive_mae
     return {'MAE': mae, 'RMSE': mse, 'MAPE%': mape, 'MASE': mase}
 
-def ets_with_diagostics(train, exog_train, exog_test, test, error, trend, seasonal, period, ljung_lags):
+def ets_with_diagostics(train, exog_train, exog_test, test, trend, seasonal, period, smoothing_level, smoothing_trend, smoothing_seasonal, damping_trend, ljung_lags):
     seasonal_periods = period if seasonal is not None else None
     try:
-        ets = ETSModel(train,error = error, trend = trend, seasonal = seasonal, seasonal_periods = seasonal_periods).fit(optimized = True)
+        ets = ExponentialSmoothing(train, trend = trend, seasonal = seasonal, seasonal_periods = seasonal_periods).fit(
+            smoothing_level = smoothing_level, smoothing_trend = smoothing_trend, smoothing_seasonal = smoothing_seasonal, damping_trend = damping_trend,
+             optimized = False)
     except Exception as e:
         print('exception: ', e)
     forecast = ets.forecast(steps = len(test))
+    if (not np.isfinite(forecast).all()) or (np.abs(forecast).max() > 1e9):
+        return None
     metrics = eval_metrics(test, forecast, train)
     ets_fitted = ets.fittedvalues
+    if not np.isfinite(ets_fitted).all():
+        return None
     residuals_ets = train - ets_fitted
     reg_model = sm.OLS(residuals_ets, sm.add_constant(exog_train['Promotion_Flag'])).fit()
     train_adjustment = reg_model.predict(sm.add_constant(exog_train['Promotion_Flag']))
     test_adjustment = reg_model.predict(sm.add_constant(exog_test['Promotion_Flag']))
     train_hybrid = ets_fitted + train_adjustment
     forecast_hybrid = forecast + test_adjustment
+    if (not np.isfinite(forecast_hybrid).all()) or (np.abs(forecast_hybrid).max() > 1e9):
+        return None
     residuals = (test - forecast_hybrid)
     ljung_10 = acorr_ljungbox(residuals, lags = ljung_lags[0], return_df = True).iloc[-1]
     ljung_20 = acorr_ljungbox(residuals, lags = ljung_lags[-1], return_df = True).iloc[-1]
     ljung_pvalue = min(ljung_10['lb_pvalue'], ljung_20['lb_pvalue'])
 
-    return {'trend': trend, 'seasonal': seasonal, 'seasonal_periods': seasonal_periods, 'AIC': ets.aic, 'BIC': ets.bic, 'MAE': metrics['MAE'], 'RMSE': metrics['RMSE'], 
+    return {'trend': trend, 'seasonal': seasonal, 'seasonal_periods': seasonal_periods,
+             'alpha, beta, gamma, phi': (smoothing_level, smoothing_trend, smoothing_seasonal, damping_trend),
+               'AIC': ets.aic, 'BIC': ets.bic, 'MAE': metrics['MAE'], 'RMSE': metrics['RMSE'], 
             'MAPE%': metrics['MAPE%'], 'MASE': metrics['MASE'], 'ljung_pvalue': ljung_pvalue, 'forecast': forecast_hybrid, 'model': ets}
 
-def search_ets(unique_id, train, exog_train, test, exog_test, error_options, trend_options, seasonal_options, period_options, ljung_lags):
+def search_ets(unique_id, train, exog_train, test, exog_test, trend_options, seasonal_options, period_options,
+               smoothing_level, smoothing_trend, smoothing_seasonal, damping_trend, ljung_lags):
     best = None
     results = []
-    for error in error_options:
-      for trend in trend_options:
-          for seasonal in seasonal_options:
-              for period in period_options:
-                  if seasonal is None and period != period_options[0]:
-                      continue
-                  with warnings.catch_warnings():
-                      warnings.filterwarnings(
-                      "ignore",
-                      message="overflow encountered in matmul",
-                      category=RuntimeWarning,
-                      module="statsmodels.tsa.holtwinters.model",
-                  )
-                      model = ets_with_diagostics(train, exog_train, exog_test, test, error, trend, seasonal, period, ljung_lags)
-                  if model is None:
-                      continue
-                  results.append(model)
-                  if best is None or (model['MASE'], model['BIC']) < (best['MASE'], best['BIC']):
-                      best = model
+    for smoothing_l in smoothing_level:
+        for smoothing_t in smoothing_trend:
+            for smoothing_s in smoothing_seasonal:
+                for damping_t in damping_trend:
+                    for trend in trend_options:
+                        for seasonal in seasonal_options:
+                            for period in period_options:
+                                if seasonal is None and period != period_options[0]:
+                                    continue
+                                with warnings.catch_warnings():
+                                    warnings.filterwarnings(
+                                    "ignore",
+                                    message="overflow encountered in matmul",
+                                    category=RuntimeWarning,
+                                    module="statsmodels.tsa.holtwinters.model",
+                                )
+                                    model = ets_with_diagostics(train, exog_train, exog_test, test, trend, seasonal, period, smoothing_l, smoothing_t, smoothing_s, damping_t,
+                                            ljung_lags)
+                                if model is None:
+                                    continue
+                                results.append(model)
+                                if best is None or (model['MASE'], model['BIC']) < (best['MASE'], best['BIC']):
+                                    best = model
     return best, results
 
 """

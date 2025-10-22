@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error
+from train_test import train_test_split
 from arima_automated import fit_sarima_with_diagnostics, search_sarima_orders
 from ets_automated import ets_with_diagostics, search_ets
 from theta_automated import search_theta
@@ -12,6 +13,7 @@ import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
+pd.options.display.float_format = '{:.2f}'.format
 
 def _clone_kwargs(kwargs):
     return {k: (v.copy() if isinstance(v, list) else v) for k, v in kwargs.items()}
@@ -77,6 +79,7 @@ def rolling_backtest(unique_id, y, y_exog, model_search_fn, search_kwargs,
                 'family': name,
                 'MASE': model.get('MASE', None),
                 'MAE': model.get('MAE', None),
+                'MAPE%': model.get('MAPE%', None),
                 'RMSE': model.get('RMSE', None),
                 'BIC': model.get('BIC', None),
                 'LB_min': model.get('ljung_pvalue', None),
@@ -84,6 +87,7 @@ def rolling_backtest(unique_id, y, y_exog, model_search_fn, search_kwargs,
                 'seasonal_order': model.get('seasonal_order', None),
                 'trend': model.get('trend', None),
                 'seasonal': model.get('seasonal', None),
+                'alpha, beta, gamma, phi': model.get('alpha, beta, gamma, phi', None),
                 'seasonal_periods': model.get('seasonal_periods', None),
                 'season_length': model.get('season_length', None),
                 'decomposition_type': model.get('decomposition_type', None)
@@ -99,46 +103,15 @@ def rolling_backtest(unique_id, y, y_exog, model_search_fn, search_kwargs,
 
     return pd.DataFrame(fold_scores)
 
-# --- Folder --- #
-folder = 'C:/Users/ckarahan/Desktop/Python Projects/Forecast Agent/'
+# --- Folders --- #
+folder = 'C:/Users/ckarahan/Desktop/Python Projects/Forecast-Agent/data/raw/'
+folder_models = 'C:/Users/ckarahan/Desktop/Python Projects/Forecast-Agent/models/'
 
 # --- Read File --- #
 df = pd.read_csv(folder + 'supply_chain_dataset1.csv')
 
-# --- Field Definitions --- #
-ts_columns = ['Date', 'Units_Sold']
-sku = ['SKU_ID']
-region = ['Region']
-warehouse = ['Warehouse_ID']
-stock_management = ['Units_Sold', 'Inventory_Level', 'Supplier_Lead_Time_Days', 'Reorder_Point', 'Order_Quantity', 'Unit_Cost', 'Unit_Price']
-promotion = ['Promotion_Flag']
-
-# --- Base Data Frame for TSA --- #
-base_df = df[sku + ts_columns + promotion]
-base_df = base_df[base_df['SKU_ID'] == 'SKU_1']
-unique_id = base_df['SKU_ID'].iat[0]
-base_df = base_df[ts_columns + promotion]
-
-# --- Formatting Data --- #
-base_df['Date'] = pd.to_datetime(base_df['Date'], errors = 'coerce')
-base_df.set_index('Date', inplace = True)
-base_df.sort_index(inplace = True)
-base_df = base_df.resample('D').agg({'Units_Sold': 'sum', 'Promotion_Flag': 'max'})
-print(base_df)
-
-# --- Train Test Split --- #
-y_diff = base_df['Units_Sold'].diff().dropna()
-weeks_for_test = 6
-test_size = weeks_for_test * 7
-y = base_df['Units_Sold']
-train, test = y.iloc[:-test_size], y.iloc[-test_size:]
-
-"""base_df['Promotion_Flag_1'] = base_df['Promotion_Flag'].shift(1).fillna(0)
-base_df['Promotion_Flag_2'] = base_df['Promotion_Flag'].shift(2).fillna(0)
-y_exog = base_df[['Promotion_Flag', 'Promotion_Flag_1', 'Promotion_Flag_2']]"""
-y_exog = base_df[['Promotion_Flag']]
-
-train_exog, test_exog = y_exog.iloc[:-test_size], y_exog[-test_size:]
+unique_id = df['SKU_ID'].iloc[0]
+train, test, train_exog, test_exog, y_exog = train_test_split(df, df['SKU_ID'].iloc[0])
 
 # --- Fold Setup --- #
 n = len(train)
@@ -174,8 +147,11 @@ error_options = ['add', 'mul']
 trend_options = ['add', 'mul', None]
 seasonal_options = ['add', 'mul', None]
 period_options = [7, 14] #, 30]
+smoothing_options = [0.1, 0.3, 0.5, 0.7, 0.9]
 lags = [10, 20]
-ets_kwargs = {'error_options': error_options, 'trend_options': trend_options, 'seasonal_options': seasonal_options, 'period_options': period_options, 'ljung_lags': lags}
+ets_kwargs = {'trend_options': trend_options, 'seasonal_options': seasonal_options, 'period_options': period_options,
+              'smoothing_level': smoothing_options, 'smoothing_trend': smoothing_options, 'smoothing_seasonal': smoothing_options, 'damping_trend': smoothing_options,
+                'ljung_lags': lags}
 
 # --- ETS --- #
 ets_backtest = rolling_backtest(unique_id, train, y_exog, search_ets, ets_kwargs, horizon_days, origins, 'ETS')
@@ -189,16 +165,13 @@ theta_backtest = rolling_backtest(unique_id, train, None, search_theta, theta_kw
 
 # --- Combining All --- #
 all_folds = pd.concat([sarima_backtest, ets_backtest, theta_backtest], ignore_index = True)
-all_folds.to_csv(folder + 'all_models.csv')
+all_folds.to_csv(folder_models + 'all_models.csv')
 
-#summary = (all_folds.groupby('family')[['MASE', 'MAE', 'RMSE', 'LB_p10', 'LB_p20', 'LB_min']].agg(['mean', 'std']))
-summary = (all_folds.groupby('family')[['MASE', 'MAE', 'RMSE', 'LB_min']].agg(['mean', 'std']))
 candidates = all_folds.sort_values(['MASE', 'LB_min'], ascending = [True, False]).reset_index(drop = True)
 
 # optionally filter for white-noise residuals:
 mask = (~candidates['family'].isin(['SARIMAX', 'ETS'])) | (candidates['LB_min'] >= 0.05)
 candidates = candidates[mask]
 winners = (candidates.sort_values(['family', 'fold', 'MASE']).groupby(['family', 'fold'], as_index = False).head(1))
-print(candidates)
-winners.to_csv(folder + 'models.csv')
+winners.to_csv(folder_models + 'models.csv')
 print(winners)
