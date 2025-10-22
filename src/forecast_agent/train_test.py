@@ -12,8 +12,7 @@ def train_test_split(df, unique_id):
 
     # --- Base Data Frame for TSA --- #
     base_df = df[sku + ts_columns + promotion]
-    base_df = base_df[base_df['SKU_ID'] == 'SKU_1']
-    unique_id = base_df['SKU_ID'].iat[0]
+    base_df = base_df[base_df['SKU_ID'] == unique_id]
     base_df = base_df[ts_columns + promotion]
 
     # --- Formatting Data --- #
@@ -33,17 +32,9 @@ def train_test_split(df, unique_id):
     y_exog = base_df[['Promotion_Flag']]
     train_exog, test_exog = y_exog.iloc[:-test_size], y_exog[-test_size:]
 
-    return train, test, train_exog, test_exog
-
-# --- Folder --- #
-folder = 'C:/Users/ckarahan/Desktop/Python Projects/Forecast-Agent/data/raw/'
-
-# --- Read File --- #
-df = pd.read_csv(folder + 'supply_chain_dataset1.csv')
+    return train, test, train_exog, test_exog, y_exog
 
 
-print(df['SKU_ID'].iloc[0])
-train, test, train_exog, test_exog = train_test_split(df, df['SKU_ID'].iloc[0])
 
 
 
