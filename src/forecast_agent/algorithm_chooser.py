@@ -6,6 +6,7 @@ from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 from arima_automated import fit_sarima_with_diagnostics, search_sarima_orders
 from ets_automated import ets_with_diagostics, search_ets
 from theta_automated import search_theta
+from ses import adaptive_response_rate_ses
 from itertools import product
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning

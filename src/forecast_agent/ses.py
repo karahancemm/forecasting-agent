@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from train_test import train_test_split
 
 def adaptive_response_rate_ses(train, h = 1, alpha_min = 0.2, alpha_max = 0.6, beta = 0.2, gamma = 0.2, init_level = None, eps = 1e-8):
                                      # forecast horizon      beta =smoothing for mean error E_t   gamma = smoothing for MAD_t
@@ -39,4 +40,11 @@ def adaptive_response_rate_ses(train, h = 1, alpha_min = 0.2, alpha_max = 0.6, b
             'alpha_t': pd.Series(alpha_t, index = train.index), 'forecast': forecast, 'last_level': level[-1]}
 
 
+# --- Folder --- #
+folder = 'C:/Users/ckarahan/Desktop/Python Projects/Forecast-Agent/data/raw/'
+
+# --- Read File --- #
+df = pd.read_csv(folder + 'supply_chain_dataset1.csv')
+
+train, test, train_exog, test_exog = train_test_split(df, df['SKU_ID'].iloc[0])
 

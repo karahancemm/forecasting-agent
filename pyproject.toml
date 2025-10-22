@@ -1,7 +1,7 @@
 [project]
 name = "forecast-agent"
 dynamic = ["version"]
-description = "Time-series forecasting helpers (ARIMA/ETS/Theta) + simple chooser"
+description = "Time-series forecasting algorithm chooser helpers"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{name="Your Name"}]
