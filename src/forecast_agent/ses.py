@@ -1,0 +1,42 @@
+import numpy as np
+import pandas as pd
+
+def adaptive_response_rate_ses(train, h = 1, alpha_min = 0.2, alpha_max = 0.6, beta = 0.2, gamma = 0.2, init_level = None, eps = 1e-8):
+                                     # forecast horizon      beta =smoothing for mean error E_t   gamma = smoothing for MAD_t
+    
+    train = pd.Series(train)
+    n = len(train)
+    
+    def _alpha(E, MAD):
+        ratio = abs(E) / (MAD + eps)
+        raw = alpha_min + (alpha_max - alpha_min) * min(1.0, ratio)
+        return np.clip(raw, alpha_min, alpha_max)
+    
+    level = np.empty(n)
+    err = np.empty(n)
+    alpha_t = np.empty(n)
+
+    level[0] = train.iloc[0] if init_level is None else float(init_level)
+    fitted_prev = level[0]
+    err[0] = train.iloc[0] - fitted_prev
+    E, MAD = err[0], abs(err[0])
+    alpha_t[0] = _alpha(E, MAD)
+
+    values = train.to_numpy()
+    for t in range(1, n):
+        yhat = level[t-1]
+        err[t] = values[t] - yhat
+        E = beta*err[t] + (1-beta)*E
+        MAD = gamma * abs(err[t]) + (1-gamma) * MAD
+        alpha_t[t] = _alpha(E, MAD)
+        level[t] = yhat + alpha_t[t] * err[t]
+
+    fitted = pd.Series(level, index = train.index)
+    forecast_index = pd.RangeIndex(0, h)
+    forecast = pd.Series(np.repeat(level[-1], h), index = forecast_index)
+
+    return {'level': pd.Series(level, index = train.index), 'fitted': fitted, 'errors': pd.Series(err, index = train.index), 
+            'alpha_t': pd.Series(alpha_t, index = train.index), 'forecast': forecast, 'last_level': level[-1]}
+
+
+

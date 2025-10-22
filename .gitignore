@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.env
+.ipynb_checkpoints/
+.vscode/
+
+# data & models (keep big files out of git)
+data/raw/*
+data/processed/*
+models/*
+
+# OS
+.DS_Store
+Thumbs.db
