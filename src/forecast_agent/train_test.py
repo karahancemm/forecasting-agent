@@ -1,5 +1,5 @@
 import pandas as pd
-
+import numpy as np
 
 def train_test_split(df, unique_id):
     # --- Field Definitions --- #
@@ -24,8 +24,8 @@ def train_test_split(df, unique_id):
 
     # --- Train Test Split --- #
     y_diff = base_df['Units_Sold'].diff().dropna()
-    weeks_for_test = 6
-    test_size = weeks_for_test * 7
+    months_for_test = 1
+    test_size = int(np.round(months_for_test * 30, 0))
     y = base_df['Units_Sold']
     train, test = y.iloc[:-test_size], y.iloc[-test_size:]
 
