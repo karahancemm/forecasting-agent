@@ -8,6 +8,7 @@ from arima_automated import fit_sarima_with_diagnostics, search_sarima_orders
 from ets_automated import ets_with_diagostics, search_ets
 from theta_automated import search_theta
 from ses import adaptive_response_rate_ses
+from croston import search_croston
 from itertools import product
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
@@ -163,6 +164,11 @@ theta_kwargs = {'season_length': season_options, 'decomposition_type': decomposi
 
 theta_backtest = rolling_backtest(unique_id, train, None, search_theta, theta_kwargs, horizon_days, origins, 'Theta')
 
+# --- Croston --- #
+alpha_options = range(0, 1, 5)
+croston_kwargs = {'alpha_options': alpha_options}
+croston_backtest = rolling_backtest(unique_id, train, y_exog, search_croston, croston_kwargs, horizon_days, origins, 'Croston')
+
 # --- Combining All --- #
 all_folds = pd.concat([sarima_backtest, ets_backtest, theta_backtest], ignore_index = True)
 all_folds.to_csv(folder_models + 'all_models.csv')
@@ -175,3 +181,5 @@ candidates = candidates[mask]
 winners = (candidates.sort_values(['family', 'fold', 'MASE']).groupby(['family', 'fold'], as_index = False).head(1))
 winners.to_csv(folder_models + 'models.csv')
 print(winners)
+
+
